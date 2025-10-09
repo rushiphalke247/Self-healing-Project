@@ -50,11 +50,8 @@ This project demonstrates a robust self-healing infrastructure system that:
 - PowerShell (Windows) or Bash (Linux/Mac)
 
 ### 1. Start the Infrastructure
-```powershell
-# Windows
-./start.ps1
-
-# Linux/Mac  
+```
+# Linux/Mac 
 ./start.sh
 ```
 
@@ -129,21 +126,9 @@ self-healing-infrastructure/
 ├── 📁 .vscode/             # VS Code tasks
 │   └── tasks.json          # Build and test tasks
 ├── docker-compose.yml      # Container orchestration
-├── start.ps1              # Windows startup script
 ├── start.sh               # Linux/Mac startup script
 └── README.md              # This file
 ```
-
-## 🛠️ VS Code Tasks
-
-Available tasks in VS Code (`Ctrl+Shift+P` → "Tasks: Run Task"):
-
-- **Start Self-Healing Infrastructure**: Launch the complete stack
-- **Stop Infrastructure**: Stop all containers  
-- **View Infrastructure Logs**: Monitor real-time logs
-- **Test Auto-Healing**: Stop NGINX to test recovery
-- **Check Service Status**: View container status
-
 ## 🧪 Testing Scenarios
 
 ### 1. Service Failure Recovery
@@ -267,5 +252,6 @@ MIT License - feel free to use this project for learning and production deployme
 ---
 
 **🎉 Happy Monitoring and Auto-Healing!** 
+
 
 This project demonstrates the power of combining monitoring, alerting, and automation to create resilient infrastructure that can heal itself when problems occur.
