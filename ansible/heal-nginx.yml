@@ -1,0 +1,59 @@
+---
+- name: Self-healing NGINX service
+  hosts: localhost
+  gather_facts: yes
+  become: yes
+  
+  vars:
+    service_name: nginx
+    max_restart_attempts: 3
+    
+  tasks:
+    - name: Check if NGINX is running
+      systemd:
+        name: "{{ service_name }}"
+        state: started
+      register: nginx_status
+      ignore_errors: yes
+      
+    - name: Restart NGINX service if down
+      systemd:
+        name: "{{ service_name }}"
+        state: restarted
+        daemon_reload: yes
+      when: nginx_status.failed
+      register: restart_result
+      
+    - name: Wait for service to be ready
+      wait_for:
+        port: 80
+        host: localhost
+        delay: 5
+        timeout: 30
+      when: restart_result.changed
+      
+    - name: Verify service is running
+      uri:
+        url: http://localhost:80
+        method: GET
+        status_code: 200
+      register: health_check
+      retries: 3
+      delay: 5
+      
+    - name: Log healing action
+      lineinfile:
+        path: /var/log/self-healing.log
+        line: "{{ ansible_date_time.iso8601 }} - NGINX service healed successfully"
+        create: yes
+      when: health_check.status == 200
+      
+    - name: Send notification on successful healing
+      debug:
+        msg: "✅ NGINX service has been successfully healed and is now running"
+      when: health_check.status == 200
+      
+    - name: Fail if service cannot be healed
+      fail:
+        msg: "❌ Failed to heal NGINX service after restart attempt"
+      when: health_check.status != 200

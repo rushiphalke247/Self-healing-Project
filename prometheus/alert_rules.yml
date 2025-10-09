@@ -1,0 +1,38 @@
+groups:
+- name: nginx_alerts
+  rules:
+  - alert: NginxDown
+    expr: up{job="nginx"} == 0
+    for: 10s
+    labels:
+      severity: critical
+    annotations:
+      summary: "NGINX service is down"
+      description: "NGINX service has been down for more than 10 seconds."
+
+  - alert: NginxHighCPU
+    expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High CPU usage detected"
+      description: "CPU usage is above 90% for more than 2 minutes."
+
+  - alert: NginxHighMemory
+    expr: (node_memory_MemTotal_bytes - node_memory_MemFree_bytes - node_memory_Buffers_bytes - node_memory_Cached_bytes) / node_memory_MemTotal_bytes * 100 > 80
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High memory usage detected"
+      description: "Memory usage is above 80% for more than 2 minutes."
+
+  - alert: NginxServiceUnhealthy
+    expr: nginx_up == 0
+    for: 30s
+    labels:
+      severity: critical
+    annotations:
+      summary: "NGINX service is unhealthy"
+      description: "NGINX service health check is failing."

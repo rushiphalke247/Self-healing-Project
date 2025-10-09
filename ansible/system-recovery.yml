@@ -1,0 +1,49 @@
+---
+- name: System recovery playbook
+  hosts: localhost
+  gather_facts: yes
+  become: yes
+  
+  vars:
+    cpu_threshold: 90
+    memory_threshold: 80
+    
+  tasks:
+    - name: Check current CPU usage
+      shell: top -bn1 | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print 100 - $1}'
+      register: cpu_usage
+      
+    - name: Check current memory usage
+      shell: free | grep Mem | awk '{printf("%.1f"), $3/$2 * 100.0}'
+      register: memory_usage
+      
+    - name: Kill high CPU processes if needed
+      shell: ps aux --sort=-%cpu | awk 'NR<=11{print $2,$11}' | tail -n +2
+      register: high_cpu_processes
+      when: cpu_usage.stdout | float > cpu_threshold
+      
+    - name: Restart services consuming high resources
+      systemd:
+        name: "{{ item }}"
+        state: restarted
+      loop:
+        - nginx
+        - docker
+      when: 
+        - cpu_usage.stdout | float > cpu_threshold or memory_usage.stdout | float > memory_threshold
+        
+    - name: Clear system caches if high memory usage
+      shell: |
+        sync
+        echo 3 > /proc/sys/vm/drop_caches
+      when: memory_usage.stdout | float > memory_threshold
+      
+    - name: Log system recovery action
+      lineinfile:
+        path: /var/log/self-healing.log
+        line: "{{ ansible_date_time.iso8601 }} - System recovery executed. CPU: {{ cpu_usage.stdout }}%, Memory: {{ memory_usage.stdout }}%"
+        create: yes
+        
+    - name: Send recovery notification
+      debug:
+        msg: "🔧 System recovery completed. CPU: {{ cpu_usage.stdout }}%, Memory: {{ memory_usage.stdout }}%"

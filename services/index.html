@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Self-Healing Infrastructure Demo</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .status { padding: 20px; border-radius: 5px; margin: 20px 0; }
+        .healthy { background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .warning { background-color: #fff3cd; border: 1px solid #ffeaa7; color: #856404; }
+    </style>
+</head>
+<body>
+    <h1>🚀 Self-Healing Infrastructure Demo</h1>
+    
+    <div class="status healthy">
+        <h3>✅ Service Status: HEALTHY</h3>
+        <p>NGINX is running and being monitored by Prometheus</p>
+        <p>Timestamp: <span id="timestamp"></span></p>
+    </div>
+    
+    <h2>📊 Monitoring Components</h2>
+    <ul>
+        <li><strong>Prometheus:</strong> Monitoring service uptime and system metrics</li>
+        <li><strong>Alertmanager:</strong> Processing alerts and triggering webhooks</li>
+        <li><strong>Ansible:</strong> Executing automated recovery playbooks</li>
+        <li><strong>Webhook Service:</strong> Receiving alerts and triggering healing actions</li>
+    </ul>
+    
+    <h2>🔧 Auto-Healing Capabilities</h2>
+    <ul>
+        <li>Service restart when NGINX goes down</li>
+        <li>System recovery when CPU usage > 90%</li>
+        <li>Memory cleanup when usage > 80%</li>
+        <li>Automated logging of all healing actions</li>
+    </ul>
+    
+    <div class="status warning">
+        <h3>⚠️ Test the System</h3>
+        <p>To test auto-healing, try stopping the NGINX service:</p>
+        <code>docker stop nginx</code>
+        <p>The monitoring system should detect the failure and automatically restart it.</p>
+    </div>
+    
+    <script>
+        document.getElementById('timestamp').textContent = new Date().toLocaleString();
+        setInterval(() => {
+            document.getElementById('timestamp').textContent = new Date().toLocaleString();
+        }, 1000);
+    </script>
+</body>
+</html>
