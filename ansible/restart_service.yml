@@ -1,0 +1,10 @@
+- name: Restart failed service
+  hosts: localhost
+  become: true
+  tasks:
+    - name: Restart Node Exporter if down
+      service:
+        name: node_exporter
+        state: restarted
+- import_playbook: /etc/ansible/playbook/heal-nginx.yml  
+- import_playbook: /etc/ansible/playbook/system-recovery.yml
