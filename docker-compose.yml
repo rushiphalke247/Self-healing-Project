@@ -61,13 +61,15 @@ services:
     networks:
       - monitoring
 
-  nginx-exporter:
-    image: nginx/nginx-prometheus-exporter:latest
-    container_name: nginx-exporter
+  blackbox-exporter:
+    image: prom/blackbox-exporter:latest
+    container_name: blackbox-exporter
     ports:
-      - "9113:9113"
+      - "9115:9115"
+    volumes:
+      - ./prometheus/blackbox.yml:/etc/blackbox_exporter/config.yml
     command:
-      - '-nginx.scrape-uri=http://nginx/nginx_status'
+      - '--config.file=/etc/blackbox_exporter/config.yml'
     depends_on:
       - nginx
     networks:

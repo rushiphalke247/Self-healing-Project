@@ -24,12 +24,15 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-# Mapping of alert names to Ansible playbooks
+# Mapping of alert names to Ansible playbooks (Docker-specific)
 ALERT_PLAYBOOK_MAP = {
     'NginxDown': '/app/ansible/heal-nginx.yml',
     'NginxServiceUnhealthy': '/app/ansible/heal-nginx.yml',
     'NginxHighCPU': '/app/ansible/system-recovery.yml',
-    'NginxHighMemory': '/app/ansible/system-recovery.yml'
+    'NginxHighMemory': '/app/ansible/system-recovery.yml',
+    # Docker-specific alerts
+    'ContainerDown': '/app/ansible/restart-container.yml',
+    'StackUnhealthy': '/app/ansible/heal-docker-stack.yml'
 }
 
 @app.route('/health', methods=['GET'])

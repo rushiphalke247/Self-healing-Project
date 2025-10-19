@@ -1,0 +1,139 @@
+---
+- name: Complete Docker stack healing
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  
+  vars:
+    compose_file: /app/docker-compose.yml
+    compose_project: self-healing-project
+    required_containers:
+      - prometheus
+      - alertmanager
+      - nginx
+      - node-exporter
+      - nginx-exporter
+      - webhook
+    
+  tasks:
+    - name: Check Docker daemon status
+      shell: docker info
+      register: docker_status
+      ignore_errors: yes
+      
+    - name: Fail if Docker is not running
+      fail:
+        msg: "❌ Docker daemon is not running. Please start Docker first."
+      when: docker_status.rc != 0
+      
+    - name: Get current container status
+      shell: docker ps -a --format "{{.Names}}\t{{.Status}}" 
+      register: container_status
+      
+    - name: Display current container status
+      debug:
+        msg: |
+          Current Container Status:
+          {{ container_status.stdout }}
+          
+    - name: Check for exited containers
+      shell: docker ps -f "status=exited" --format "{{.Names}}"
+      register: exited_containers
+      
+    - name: Check for unhealthy containers
+      shell: docker ps -f "health=unhealthy" --format "{{.Names}}"
+      register: unhealthy_containers
+      ignore_errors: yes
+      
+    - name: Stop and remove problematic containers
+      shell: |
+        for container in {{ exited_containers.stdout_lines | join(' ') }} {{ unhealthy_containers.stdout_lines | join(' ') }}; do
+          if [ ! -z "$container" ]; then
+            docker stop "$container" 2>/dev/null || true
+            docker rm "$container" 2>/dev/null || true
+          fi
+        done
+      when: (exited_containers.stdout_lines | length > 0) or (unhealthy_containers.stdout_lines | length > 0)
+      
+    - name: Restart the entire Docker Compose stack
+      shell: |
+        cd "{{ compose_file | dirname }}"
+        docker-compose down
+        docker-compose up -d
+      register: compose_restart
+      
+    - name: Wait for containers to start
+      wait_for:
+        timeout: 60
+      delegate_to: localhost
+      
+    - name: Verify all required containers are running
+      shell: docker ps --format "{{.Names}}" | grep -E "{{ required_containers | join('|') }}"
+      register: running_containers
+      retries: 3
+      delay: 10
+      
+    - name: Check container health
+      shell: |
+        echo "Container Health Status:"
+        for container in {{ required_containers | join(' ') }}; do
+          status=$(docker inspect "$container" --format='{{.State.Status}}' 2>/dev/null || echo "not found")
+          echo "$container: $status"
+        done
+      register: health_status
+      
+    - name: Test service endpoints
+      uri:
+        url: "{{ item.url }}"
+        method: GET
+        status_code: 200
+        timeout: 10
+      register: endpoint_tests
+      ignore_errors: yes
+      loop:
+        - { name: "NGINX", url: "http://localhost:80" }
+        - { name: "Prometheus", url: "http://localhost:9090/-/healthy" }
+        - { name: "Alertmanager", url: "http://localhost:9093/-/healthy" }
+        - { name: "Webhook", url: "http://localhost:5000/health" }
+      
+    - name: Display endpoint test results
+      debug:
+        msg: |
+          Endpoint Test Results:
+          {% for result in endpoint_tests.results %}
+          - {{ result.item.name }}: {{ 'HEALTHY' if result.status == 200 else 'FAILED' }}
+          {% endfor %}
+          
+    - name: Get final container status
+      shell: docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+      register: final_status
+      
+    - name: Log complete healing action
+      lineinfile:
+        path: /var/log/self-healing.log
+        line: |
+          {{ ansible_date_time.iso8601 }} - Complete Docker stack healing performed:
+          Running containers: {{ running_containers.stdout_lines | length }}/{{ required_containers | length }}
+          Successful endpoints: {{ endpoint_tests.results | selectattr('status', 'equalto', 200) | list | length }}/{{ endpoint_tests.results | length }}
+        create: yes
+      become: yes
+      
+    - name: Send comprehensive healing notification
+      debug:
+        msg: |
+          🔧 Complete Docker Stack Healing Summary:
+          ✅ Docker Daemon: Running
+          ✅ Containers Restarted: {{ required_containers | length }}
+          ✅ Running Containers: {{ running_containers.stdout_lines | length }}/{{ required_containers | length }}
+          ✅ Healthy Endpoints: {{ endpoint_tests.results | selectattr('status', 'equalto', 200) | list | length }}/{{ endpoint_tests.results | length }}
+          
+          Container Status:
+          {{ health_status.stdout }}
+          
+          Final Status:
+          {{ final_status.stdout }}
+          
+    - name: Fail if critical services are not healthy
+      fail:
+        msg: "❌ Critical services failed to start properly after healing attempt"
+      when: (endpoint_tests.results | selectattr('status', 'equalto', 200) | list | length) < 3

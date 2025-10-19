@@ -1,59 +1,86 @@
 ---
-- name: Self-healing NGINX service
-  hosts: local
+- name: Self-healing NGINX Docker container
+  hosts: localhost
+  connection: local
   gather_facts: yes
-  become: yes
   
   vars:
-    service_name: nginx
+    container_name: nginx
+    compose_file: /app/docker-compose.yml
     max_restart_attempts: 3
     
   tasks:
-    - name: Check if NGINX is running
-      systemd:
-        name: "{{ service_name }}"
-        state: started
-      register: nginx_status
+    - name: Check if NGINX container is running
+      docker_container_info:
+        name: "{{ container_name }}"
+      register: nginx_container_info
       ignore_errors: yes
       
-    - name: Restart NGINX service if down
-      systemd:
-        name: "{{ service_name }}"
-        state: restarted
-        daemon_reload: yes
-      when: nginx_status is failed or nginx_status.changed == false
+    - name: Display container status
+      debug:
+        msg: "Container {{ container_name }} status: {{ nginx_container_info.container.State.Status if nginx_container_info.exists else 'not found' }}"
+      
+    - name: Restart NGINX container if not running
+      docker_container:
+        name: "{{ container_name }}"
+        state: started
+        restart: yes
+      when: not nginx_container_info.exists or nginx_container_info.container.State.Status != "running"
       register: restart_result
       
-    - name: Wait for service to be ready
+    - name: Alternative restart using docker-compose
+      shell: |
+        cd "{{ compose_file | dirname }}"
+        docker-compose restart {{ container_name }}
+      when: restart_result is failed
+      register: compose_restart_result
+      ignore_errors: yes
+      
+    - name: Wait for container to be ready
       wait_for:
         port: 80
         host: localhost
         delay: 5
         timeout: 30
-      when: restart_result.changed
+      when: restart_result.changed or compose_restart_result.changed
       
-    - name: Verify service is running
+    - name: Verify NGINX service is responding
       uri:
         url: http://localhost:80
         method: GET
         status_code: 200
+        timeout: 10
       register: health_check
       retries: 3
       delay: 5
       
+    - name: Check container health status
+      docker_container_info:
+        name: "{{ container_name }}"
+      register: final_container_status
+      
     - name: Log healing action
       lineinfile:
         path: /var/log/self-healing.log
-        line: "{{ ansible_date_time.iso8601 }} - NGINX service healed successfully"
+        line: "{{ ansible_date_time.iso8601 }} - NGINX Docker container healed successfully - Status: {{ final_container_status.container.State.Status }}"
         create: yes
       when: health_check.status == 200
+      become: yes
       
     - name: Send notification on successful healing
       debug:
-        msg: "✅ NGINX service has been successfully healed and is now running"
+        msg: "✅ NGINX Docker container has been successfully healed and is now running (Status: {{ final_container_status.container.State.Status }})"
       when: health_check.status == 200
+      
+    - name: Log failure if service cannot be healed
+      lineinfile:
+        path: /var/log/self-healing.log
+        line: "{{ ansible_date_time.iso8601 }} - ❌ Failed to heal NGINX Docker container"
+        create: yes
+      when: health_check.status != 200
+      become: yes
       
     - name: Fail if service cannot be healed
       fail:
-        msg: "❌ Failed to heal NGINX service after restart attempt"
+        msg: "❌ Failed to heal NGINX Docker container after restart attempts"
       when: health_check.status != 200

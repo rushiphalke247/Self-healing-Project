@@ -1,0 +1,116 @@
+---
+- name: Restart specific Docker container
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  
+  vars:
+    target_container: "{{ container_name | default('nginx') }}"
+    compose_file: /app/docker-compose.yml
+    
+  tasks:
+    - name: Display target container
+      debug:
+        msg: "Attempting to heal container: {{ target_container }}"
+        
+    - name: Check if container exists
+      shell: docker inspect "{{ target_container }}"
+      register: container_exists
+      ignore_errors: yes
+      
+    - name: Get container current status
+      shell: docker inspect "{{ target_container }}" --format='{{.State.Status}}'
+      register: container_status
+      when: container_exists.rc == 0
+      
+    - name: Stop container if running
+      docker_container:
+        name: "{{ target_container }}"
+        state: stopped
+      when: container_exists.rc == 0 and container_status.stdout == "running"
+      ignore_errors: yes
+      
+    - name: Remove container if exists
+      docker_container:
+        name: "{{ target_container }}"
+        state: absent
+      when: container_exists.rc == 0
+      ignore_errors: yes
+      
+    - name: Recreate container using docker-compose
+      shell: |
+        cd "{{ compose_file | dirname }}"
+        docker-compose up -d "{{ target_container }}"
+      register: recreate_result
+      
+    - name: Wait for container to be ready
+      wait_for:
+        timeout: 30
+      delegate_to: localhost
+      
+    - name: Verify container is running
+      shell: docker inspect "{{ target_container }}" --format='{{.State.Status}}'
+      register: final_status
+      retries: 3
+      delay: 5
+      
+    - name: Test container health (for nginx)
+      uri:
+        url: "http://localhost:80"
+        method: GET
+        status_code: 200
+        timeout: 10
+      register: health_test
+      when: target_container == "nginx"
+      ignore_errors: yes
+      
+    - name: Test container health (for prometheus)
+      uri:
+        url: "http://localhost:9090/-/healthy"
+        method: GET
+        status_code: 200
+        timeout: 10
+      register: health_test
+      when: target_container == "prometheus"
+      ignore_errors: yes
+      
+    - name: Test container health (for alertmanager)
+      uri:
+        url: "http://localhost:9093/-/healthy"
+        method: GET
+        status_code: 200
+        timeout: 10
+      register: health_test
+      when: target_container == "alertmanager"
+      ignore_errors: yes
+      
+    - name: Test container health (for webhook)
+      uri:
+        url: "http://localhost:5000/health"
+        method: GET
+        status_code: 200
+        timeout: 10
+      register: health_test
+      when: target_container == "webhook"
+      ignore_errors: yes
+      
+    - name: Log container healing action
+      lineinfile:
+        path: /var/log/self-healing.log
+        line: "{{ ansible_date_time.iso8601 }} - Container {{ target_container }} healed - Status: {{ final_status.stdout }} - Health: {{ 'PASS' if health_test.status == 200 else 'UNKNOWN' }}"
+        create: yes
+      become: yes
+      
+    - name: Send healing notification
+      debug:
+        msg: |
+          🐳 Container Healing Results:
+          - Container: {{ target_container }}
+          - Final Status: {{ final_status.stdout }}
+          - Health Check: {{ 'PASS' if health_test.status == 200 else 'UNKNOWN' }}
+          - Healing: {{ 'SUCCESS' if final_status.stdout == 'running' else 'FAILED' }}
+          
+    - name: Fail if container is not running
+      fail:
+        msg: "❌ Failed to heal container {{ target_container }}"
+      when: final_status.stdout != "running"
