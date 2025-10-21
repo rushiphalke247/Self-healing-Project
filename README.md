@@ -50,11 +50,13 @@ This project demonstrates a robust self-healing infrastructure system that:
 ## 🚀 Quick Start
 
 ### Prerequisites
+- **Linux** (Ubuntu 20.04+ / Debian 11+ / CentOS 8+ / RHEL 8+)
 - **Docker** (v20.10+)
 - **Docker Compose** (v2.0+)
-- **Bash** (Linux/macOS)
+- **Bash** shell
 - **curl** (for health checks)
 - **Git** (for cloning repository)
+- **sudo** access (for Docker operations)
 
 ### 1. Clone and Setup
 ```bash
@@ -69,6 +71,12 @@ chmod +x start.sh
 ./start.sh
 ```
 
+**Alternative Manual Start:**
+```bash
+# Build and start all services
+docker-compose up --build -d
+```
+
 ### 3. Verify Deployment
 After startup, all services should be accessible:
 - **🔍 Prometheus**: http://localhost:9090
@@ -81,7 +89,7 @@ After startup, all services should be accessible:
 ```bash
 # Test 1: Stop NGINX service
 docker stop nginx
-# Expected: Service automatically restarts within 30 seconds
+# Expected: Service automatically restarts within 30 seconds 
 
 # Test 2: Watch healing in action
 docker-compose logs -f webhook
@@ -97,19 +105,19 @@ curl http://localhost/
 |-------|---------|----------|--------|
 | `NginxDown` | Service stops | Critical | Restart service |
 | `NginxHighCPU` | CPU > 90% | Warning | System recovery |
-| `NginxHighMemory` | Memory > 80% | Warning | Cache cleanup |
+| `NginxHighMemory` | Memory > 80% | Warning | Cache cleanup | 
 | `NginxServiceUnhealthy` | Health check fails | Critical | Service restart |
 
 ### Metrics Collected
 - **System**: CPU, memory, disk usage
 - **Network**: Connection counts, response times  
 - **Application**: NGINX request rates, error rates
-- **Custom**: Service health checks
+- **Custom**: Service health checks 
 
 ## 🔧 Auto-Healing Actions
 
-### Service Recovery (`heal-nginx.yml`)
-1. Check service status
+### Service Recovery (`heal-nginx.yml`) 
+1. Check service status 
 2. Restart if down
 3. Verify health endpoint
 4. Log healing action
@@ -117,7 +125,7 @@ curl http://localhost/
 
 ### System Recovery (`system-recovery.yml`)
 1. Monitor resource usage
-2. Kill high-resource processes
+2. Kill high-resource processes 
 3. Clear system caches
 4. Restart problematic services
 5. Log recovery actions
@@ -162,11 +170,13 @@ This project includes VS Code tasks for easy development and testing:
 - **📋 Check Service Status**: Container health overview
 
 **Note**: `.vscode/` folder is for development only and not needed for production deployments.
+
 ## 🚀 Deployment Options
 
 ### 🐳 Local Development (Docker)
 ```bash
-# Quick start with Docker Compose
+# Quick start with startup script
+chmod +x start.sh
 ./start.sh
 
 # Or manually
@@ -175,10 +185,10 @@ docker-compose up --build -d
 
 ### ☁️ Cloud Deployment
 
-#### AWS EC2 / Google Cloud / Azure VM
+#### AWS EC2 / Google Cloud Compute / Azure VM
 ```bash
-# 1. Provision VM with Docker installed
-# 2. Clone repository (exclude .vscode/ for production)
+# 1. Provision Linux VM (Ubuntu 20.04+ recommended) with Docker installed
+# 2. Clone repository
 git clone --depth 1 https://github.com/rushiphalke247/Self-healing-Project.git
 cd Self-healing-Project
 
@@ -212,12 +222,16 @@ docker stack deploy -c docker-compose.yml monitoring
 #### Security Hardening
 - Change default webhook credentials in `alertmanager.yml`
 - Use TLS/SSL certificates for external access
-- Implement proper firewall rules
+- Implement proper firewall rules (UFW/iptables)
 - Use secrets management for sensitive data
+- Configure SELinux/AppArmor policies 
+- Restrict Docker daemon access
 
 #### Scaling & Performance
-- Add load balancers for high availability
+- Add load balancers (HAProxy/NGINX) for high availability
 - Use persistent volumes for data retention
+- Configure systemd service units for auto-start
+- Implement log rotation with logrotate
 - Configure resource limits in docker-compose.yml
 - Implement log rotation policies
 
@@ -348,13 +362,6 @@ curl http://localhost:9093/api/v1/status
 curl -X POST http://localhost:5000/webhook -H "Content-Type: application/json" -d '{}'
 ```
 
-## 📚 Learning Resources
-
-- [Prometheus Documentation](https://prometheus.io/docs/)
-- [Alertmanager Guide](https://prometheus.io/docs/alerting/latest/alertmanager/)
-- [Ansible Playbooks](https://docs.ansible.com/ansible/latest/user_guide/playbooks.html)
-- [Docker Compose Reference](https://docs.docker.com/compose/)
-
 ## 🤝 Contributing
 
 We welcome contributions! Please follow these steps:
@@ -404,20 +411,3 @@ Please use GitHub Issues to report bugs or request features. Include:
 - **Deployment Time**: < 2 minutes
 - **Recovery Time**: < 30 seconds
 - **Platforms**: Linux, macOS, Cloud
-
-## 📄 License
-
-MIT License - feel free to use this project for learning and production deployments.
-
----
-
-<div align="center">
-
-**🎉 Happy Monitoring and Auto-Healing!** 
-
-*Building resilient infrastructure, one container at a time.*
-
-[![Star this repo](https://img.shields.io/github/stars/rushiphalke247/Self-healing-Project?style=social)](https://github.com/rushiphalke247/Self-healing-Project)
-[![Follow on GitHub](https://img.shields.io/github/followers/rushiphalke247?style=social)](https://github.com/rushiphalke247)
-
-</div>

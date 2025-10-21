@@ -80,11 +80,9 @@ services:
     container_name: webhook
     ports:
       - "5000:5000"
-    command: >
-         sh -c "python3 app.py >> /var/log/webhook.log 2>&1"
     volumes:
       - ./ansible:/app/ansible
-      - /home/ec2-user:/var/log
+      - webhook_logs:/var/log
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - FLASK_ENV=production
@@ -100,3 +98,4 @@ networks:
 
 volumes:
   prometheus_data:
+  webhook_logs:
