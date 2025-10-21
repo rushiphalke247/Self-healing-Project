@@ -76,15 +76,16 @@ services:
       - monitoring
 
   webhook:
-    build:
-      context: ./webhook
-      dockerfile: Dockerfile
+    image: webhook
     container_name: webhook
     ports:
       - "5000:5000"
+    command: >
+         sh -c "python3 app.py >> /var/log/webhook.log 2>&1"
     volumes:
       - ./ansible:/app/ansible
-      - /var/log:/var/log
+      - /home/ec2-user:/var/log
+      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - FLASK_ENV=production
     depends_on:

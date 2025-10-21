@@ -13,7 +13,7 @@ route:
 receivers:
   - name: 'webhook'
     webhook_configs:
-      - url: 'http://localhost:5000/webhook'
+      - url: 'http://webhook:5000/webhook'
         send_resolved: true
 
 inhibit_rules:
