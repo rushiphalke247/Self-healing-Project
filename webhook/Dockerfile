@@ -18,12 +18,13 @@ COPY webhook_handler.py .
 
 # Create log directory
 RUN mkdir -p /var/log
+RUN mkdir -p /app/logs
 
 # Expose port
 EXPOSE 5000
 
 # Create non-root user
-RUN useradd -m webhook && chown -R webhook:webhook /app /var/log
+RUN useradd -m webhook && chown -R webhook:webhook /app /var/log  /app/logs
 USER webhook
 
 # Run the application

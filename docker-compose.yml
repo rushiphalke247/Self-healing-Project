@@ -82,7 +82,7 @@ services:
       - "5000:5000"
     volumes:
       - ./ansible:/app/ansible
-      - webhook_logs:/var/log
+      - ./webhook/logs:/app/logs
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - FLASK_ENV=production
@@ -98,4 +98,3 @@ networks:
 
 volumes:
   prometheus_data:
-  webhook_logs:

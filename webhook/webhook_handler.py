@@ -12,12 +12,15 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# Configure logging
+
+# Configure logging to user-accessible directory
+LOG_DIR = '/app/logs'
+os.makedirs(LOG_DIR, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('/var/log/webhook.log'),
+        logging.FileHandler(os.path.join(LOG_DIR, 'webhook.log')),
         logging.StreamHandler()
     ]
 )
@@ -147,10 +150,9 @@ def log_healing_action(alert_name, status, details):
             'status': status,
             'details': details
         }
-        
-        with open('/var/log/healing-actions.log', 'a') as f:
+        log_path = os.path.join(LOG_DIR, 'healing-actions.log')
+        with open(log_path, 'a') as f:
             f.write(json.dumps(log_entry) + '\n')
-            
     except Exception as e:
         logger.error(f"Failed to log healing action: {str(e)}")
 
