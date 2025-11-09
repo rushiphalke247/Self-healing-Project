@@ -78,6 +78,7 @@ services:
   webhook:
     image: webhook
     container_name: webhook
+    user: root
     ports:
       - "5000:5000"
     volumes:

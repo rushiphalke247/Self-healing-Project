@@ -12,15 +12,12 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-
-# Configure logging to user-accessible directory
-LOG_DIR = '/app/logs'
-os.makedirs(LOG_DIR, exist_ok=True)
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler(os.path.join(LOG_DIR, 'webhook.log')),
+        logging.FileHandler('/app/logs/webhook.log'),
         logging.StreamHandler()
     ]
 )
@@ -52,39 +49,39 @@ def handle_webhook():
     """Handle incoming webhook from Alertmanager"""
     try:
         data = request.get_json()
-        
+
         if not data:
             logger.error("No JSON data received")
             return jsonify({'error': 'No JSON data'}), 400
-            
+
         logger.info(f"Received webhook: {json.dumps(data, indent=2)}")
-        
+
         # Process each alert
         for alert in data.get('alerts', []):
             alert_name = alert.get('labels', {}).get('alertname')
             status = alert.get('status')
-            
+
             logger.info(f"Processing alert: {alert_name} with status: {status}")
-            
+
             # Only process firing alerts
             if status == 'firing' and alert_name in ALERT_PLAYBOOK_MAP:
                 playbook_path = ALERT_PLAYBOOK_MAP[alert_name]
                 success = execute_playbook(playbook_path, alert_name, alert)
-                
+
                 if success:
                     logger.info(f"Successfully executed healing for {alert_name}")
                 else:
                     logger.error(f"Failed to execute healing for {alert_name}")
-            
+
             elif status == 'resolved':
                 logger.info(f"Alert {alert_name} has been resolved")
-                
+
         return jsonify({
             'status': 'success',
             'message': 'Webhook processed successfully',
             'alerts_processed': len(data.get('alerts', []))
         })
-        
+
     except Exception as e:
         logger.error(f"Error processing webhook: {str(e)}")
         return jsonify({'error': str(e)}), 500
@@ -96,14 +93,14 @@ def execute_playbook(playbook_path, alert_name, alert_data):
         if not os.path.exists(playbook_path):
             logger.error(f"Playbook not found: {playbook_path}")
             return False
-            
+
         # Prepare extra variables for Ansible
         extra_vars = {
             'alert_name': alert_name,
             'alert_instance': alert_data.get('labels', {}).get('instance', 'unknown'),
             'alert_severity': alert_data.get('labels', {}).get('severity', 'unknown')
         }
-        
+
         # Build Ansible command
         cmd = [
             'ansible-playbook',
@@ -112,9 +109,9 @@ def execute_playbook(playbook_path, alert_name, alert_data):
             '--connection', 'local',
             '--extra-vars', json.dumps(extra_vars)
         ]
-        
+
         logger.info(f"Executing command: {' '.join(cmd)}")
-        
+
         # Execute playbook
         result = subprocess.run(
             cmd,
@@ -122,7 +119,7 @@ def execute_playbook(playbook_path, alert_name, alert_data):
             text=True,
             timeout=300  # 5 minute timeout
         )
-        
+
         if result.returncode == 0:
             logger.info(f"Playbook executed successfully: {result.stdout}")
             log_healing_action(alert_name, 'SUCCESS', result.stdout)
@@ -131,7 +128,7 @@ def execute_playbook(playbook_path, alert_name, alert_data):
             logger.error(f"Playbook execution failed: {result.stderr}")
             log_healing_action(alert_name, 'FAILED', result.stderr)
             return False
-            
+
     except subprocess.TimeoutExpired:
         logger.error(f"Playbook execution timed out for {alert_name}")
         log_healing_action(alert_name, 'TIMEOUT', 'Playbook execution timed out')
@@ -150,9 +147,10 @@ def log_healing_action(alert_name, status, details):
             'status': status,
             'details': details
         }
-        log_path = os.path.join(LOG_DIR, 'healing-actions.log')
-        with open(log_path, 'a') as f:
+
+        with open('/app/logs/healing-actions.log', 'a') as f:
             f.write(json.dumps(log_entry) + '\n')
+
     except Exception as e:
         logger.error(f"Failed to log healing action: {str(e)}")
 

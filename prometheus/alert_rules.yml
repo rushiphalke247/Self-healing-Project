@@ -1,6 +1,8 @@
 groups:
 - name: nginx_alerts
   rules:
+
+  # 🔴 NGINX DOWN ALERT (from Blackbox Exporter)
   - alert: NginxDown
     expr: probe_success{job="nginx"} == 0
     for: 10s
@@ -8,26 +10,29 @@ groups:
       severity: critical
     annotations:
       summary: "NGINX service is down"
-      description: "NGINX service has been down for more than 10 seconds."
+      description: "The NGINX endpoint failed the probe for more than 10 seconds."
 
+  # ⚠️ NGINX CONTAINER HIGH CPU (from cAdvisor)
   - alert: NginxHighCPU
-    expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
-    for: 2m
+    expr: rate(container_cpu_usage_seconds_total{name="nginx"}[2m]) * 100 > 80
+    for: 1m
     labels:
       severity: warning
     annotations:
-      summary: "High CPU usage detected"
-      description: "CPU usage is above 90% for more than 2 minutes."
+      summary: "High CPU usage in NGINX container"
+      description: "The NGINX container is using more than 80% CPU for over 1 minute."
 
+  # ⚠️ NGINX CONTAINER HIGH MEMORY (from cAdvisor)
   - alert: NginxHighMemory
-    expr: (node_memory_MemTotal_bytes - node_memory_MemFree_bytes - node_memory_Buffers_bytes - node_memory_Cached_bytes) / node_memory_MemTotal_bytes * 100 > 80
+    expr: (container_memory_usage_bytes{name="nginx"} / container_spec_memory_limit_bytes{name="nginx"}) * 100 > 80
     for: 2m
     labels:
       severity: warning
     annotations:
-      summary: "High memory usage detected"
-      description: "Memory usage is above 80% for more than 2 minutes."
+      summary: "High memory usage in NGINX container"
+      description: "The NGINX container memory usage exceeded 80% for more than 2 minutes."
 
+  # 🔴 NGINX UNHEALTHY (from Blackbox Exporter)
   - alert: NginxServiceUnhealthy
     expr: probe_success{job="nginx"} == 0
     for: 30s
@@ -35,13 +40,35 @@ groups:
       severity: critical
     annotations:
       summary: "NGINX service is unhealthy"
-      description: "NGINX service health check is failing."
-  
+      description: "The NGINX probe check is failing consistently for 30 seconds."
+
+  # ⚠️ NGINX SLOW RESPONSE (from Blackbox Exporter)
   - alert: NginxSlowResponse
     expr: probe_duration_seconds{job="nginx"} > 3
     for: 1m
     labels:
       severity: warning
     annotations:
-      summary: "NGINX slow response time"
-      description: "NGINX response time is above 3 seconds for more than 1 minute."
+      summary: "NGINX response is slow"
+      description: "NGINX response time has exceeded 3 seconds for more than 1 minute."
+
+  # ⚙️ SYSTEM HIGH CPU (from Node Exporter)
+  - alert: SystemHighCPU
+    expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High system CPU usage"
+      description: "Host CPU usage is above 90% for over 2 minutes."
+
+  # ⚙️ SYSTEM HIGH MEMORY (from Node Exporter)
+  - alert: SystemHighMemory
+    expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High system memory usage"
+      description: "Host memory usage is above 85% for more than 2 minutes."
+

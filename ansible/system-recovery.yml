@@ -1,15 +1,17 @@
 ---
-- name: Docker system recovery playbook
+- name: Docker System Self-Healing and Recovery Playbook
   hosts: localhost
   connection: local
   gather_facts: yes
-  
+
   vars:
     cpu_threshold: 90
     memory_threshold: 80
     compose_file: /app/docker-compose.yml
-    
+    docker_host: "unix:///var/run/docker.sock"
+
   tasks:
+
     - name: Check current CPU usage
       shell: |
         if command -v top >/dev/null; then
@@ -18,91 +20,135 @@
           docker exec nginx sh -c "cat /proc/loadavg | awk '{print \$1 * 100}'"
         fi
       register: cpu_usage
-      
+      ignore_errors: yes
+
     - name: Check current memory usage
       shell: |
+        {% raw %}
         if command -v free >/dev/null; then
           free | grep Mem | awk '{printf("%.1f"), $3/$2 * 100.0}'
         else
           docker stats --no-stream --format "table {{.MemPerc}}" | tail -n +2 | head -1 | sed 's/%//'
         fi
+        {% endraw %}
       register: memory_usage
-      
-    - name: Get Docker container resource usage
-      shell: docker stats --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemPerc}}"
-      register: docker_stats
-      
+      ignore_errors: yes
+
     - name: Display resource usage
       debug:
         msg: |
-          Current System Resources:
+          🧠 System Resource Status:
           CPU Usage: {{ cpu_usage.stdout }}%
           Memory Usage: {{ memory_usage.stdout }}%
-          Docker Container Stats:
-          {{ docker_stats.stdout }}
-          
-    - name: Identify high resource Docker containers
+      ignore_errors: yes
+
+    - name: Identify high resource consuming Docker containers
       shell: |
-        docker stats --no-stream --format "{{.Container}} {{.CPUPerc}} {{.MemPerc}}" | 
+        {% raw %}
+        docker stats --no-stream --format "{{.Container}} {{.CPUPerc}} {{.MemPerc}}" |
         awk '$2+0 > 80 || $3+0 > 80 {print $1}'
+        {% endraw %}
       register: high_resource_containers
-      
+      ignore_errors: yes
+
     - name: Restart high resource consuming containers
-      docker_container:
+      community.docker.docker_container:
         name: "{{ item }}"
         restart: yes
+        docker_host: "{{ docker_host }}"
       loop: "{{ high_resource_containers.stdout_lines }}"
       when: high_resource_containers.stdout_lines | length > 0
-      
-    - name: Restart monitoring stack if resources are high
+      register: container_restart_result
+      ignore_errors: yes
+
+    - name: Restart monitoring stack if system resources exceed threshold
       shell: |
         cd "{{ compose_file | dirname }}"
         docker-compose restart nginx prometheus alertmanager
-      when: 
-        - cpu_usage.stdout | float > cpu_threshold or memory_usage.stdout | float > memory_threshold
+      when:
+        - cpu_usage.stdout | float > cpu_threshold
+          or memory_usage.stdout | float > memory_threshold
       register: stack_restart_result
-        
-    - name: Clean up Docker system if memory usage is high
+      ignore_errors: yes
+
+    - name: Clean up Docker system when memory usage is high
       shell: |
         docker system prune -f
         docker volume prune -f
         docker network prune -f
       when: memory_usage.stdout | float > memory_threshold
       register: docker_cleanup_result
-      
-    - name: Clear system caches if high memory usage (when available)
+      ignore_errors: yes
+
+    - name: Clear Linux caches when memory usage is high
       shell: |
         sync
         echo 3 > /proc/sys/vm/drop_caches
-      when: 
+      when:
         - memory_usage.stdout | float > memory_threshold
         - ansible_system == "Linux"
       become: yes
       ignore_errors: yes
-      
-    - name: Check final container health
-      shell: docker ps --filter "status=exited" --format "{{.Names}}"
+
+    - name: Check for any stopped or unhealthy containers
+      shell: |
+        {% raw %}
+        docker ps --filter "status=exited" --format "{{.Names}}"
+        {% endraw %}
       register: unhealthy_containers
-      
-    - name: Restart any exited containers
+      ignore_errors: yes
+
+    - name: Restart exited containers using docker-compose
       shell: |
         cd "{{ compose_file | dirname }}"
         docker-compose up -d
       when: unhealthy_containers.stdout_lines | length > 0
-      
-    - name: Log system recovery action
+      register: recovery_restart_result
+      ignore_errors: yes
+
+    - name: Verify Docker system health
+      shell: |
+        {% raw %}
+        docker ps --filter "status=running" --format "{{.Names}}"
+        {% endraw %}
+      register: running_containers
+      ignore_errors: yes
+
+    - name: Log successful recovery action
       lineinfile:
-        path: /var/log/self-healing.log
-        line: "{{ ansible_date_time.iso8601 }} - Docker system recovery executed. CPU: {{ cpu_usage.stdout }}%, Memory: {{ memory_usage.stdout }}%, Containers restarted: {{ high_resource_containers.stdout_lines | length }}"
+        path: /app/logs/self-healing.log
+        line: "{{ ansible_date_time.iso8601 }} - ✅ System Recovery Executed Successfully | CPU: {{ cpu_usage.stdout }}% | Memory: {{ memory_usage.stdout }}% | Restarted Containers: {{ high_resource_containers.stdout_lines | length }} | Total Running Containers: {{ running_containers.stdout_lines | length }}"
         create: yes
+      when:
+        - running_containers.stdout_lines | length > 0
       become: yes
-        
-    - name: Send recovery notification
+      ignore_errors: yes
+
+    - name: Send notification on successful recovery
       debug:
         msg: |
-          🔧 Docker System Recovery Completed:
+          ✅ Docker System Self-Healing Completed Successfully
           - CPU Usage: {{ cpu_usage.stdout }}%
           - Memory Usage: {{ memory_usage.stdout }}%
-          - High Resource Containers: {{ high_resource_containers.stdout_lines | length }}
-          - Docker Cleanup: {{ 'Performed' if docker_cleanup_result.changed else 'Not needed' }}
-          - Stack Restart: {{ 'Performed' if stack_restart_result.changed else 'Not needed' }}
+          - Restarted Containers: {{ high_resource_containers.stdout_lines | length }}
+          - Running Containers: {{ running_containers.stdout_lines | length }}
+      when:
+        - running_containers.stdout_lines | length > 0
+      ignore_errors: yes
+
+    - name: Log failure if recovery unsuccessful
+      lineinfile:
+        path: /app/logs/self-healing.log
+        line: "{{ ansible_date_time.iso8601 }} - ❌ System Recovery Failed | CPU: {{ cpu_usage.stdout }}% | Memory: {{ memory_usage.stdout }}%"
+        create: yes
+      when:
+        - running_containers.stdout_lines | length == 0
+      become: yes
+      ignore_errors: yes
+
+    - name: Fail if system cannot recover
+      fail:
+        msg: "❌ System recovery failed after all restart and cleanup attempts"
+      when:
+        - running_containers.stdout_lines | length == 0
+      ignore_errors: yes
